@@ -5,3 +5,4 @@ data*
 *.parquet
 *.csv
 Old\ Scripts/
+data/

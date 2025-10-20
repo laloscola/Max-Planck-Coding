@@ -6,33 +6,6 @@ import numpy as np
 import argparse
 import pandas as pd 
 
-def gauss(x, A, mu, sigma):
-    return A * np.exp(-(x - mu)**2 / (2.0 * sigma**2))
-
-def fit_peak(centers, counts, around_mu=None, halfwidth=None):
-    # pick default region around max if not given
-    if around_mu is None:
-        i_max = np.argmax(counts)
-        around_mu = centers[i_max]
-    if halfwidth is None:
-        halfwidth = 1.0  # ns, adjust to your resolution
-    mask = (centers >= around_mu - halfwidth) & (centers <= around_mu + halfwidth)
-    x = centers[mask]
-    y = counts[mask]
-    if x.size < 5 or y.max() == 0:
-        return None
-    A0 = y.max()
-    mu0 = x[y.argmax()]
-    # crude sigma guess: halfwidth/2
-    sig0 = max(halfwidth/2.0, (x[1]-x[0]) * 2.0)
-    try:
-        popt, pcov = curve_fit(gauss, x, y, p0=[A0, mu0, sig0], maxfev=10000)
-        A, mu, sigma = popt
-        fwhm = 2.35482004503 * abs(sigma)
-        return dict(A=A, mu=mu, sigma=abs(sigma), fwhm=fwhm, x=x, y=y, cov=pcov)
-    except Exception:
-        return None
-
 def bunching_histograms_parquet(path_sig, path_bkgrnd, batch_size=5_000_000, tot_range=(1, 5), delta_range=(0, 100), num_bins=135, columns=("ToT_ns","ToA_ns")):
     clock_start = time.perf_counter()  # start timer 
 
