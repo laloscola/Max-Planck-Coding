@@ -1,0 +1,9 @@
+awk '{
+  printf "%s,%s,%s,%s,%s,%s\n",
+    substr($0,  1, 16),    
+    substr($0, 17, 13),    
+    substr($0, 30,  6),   
+    substr($0, 36,  4),    
+    substr($0, 40, 13),    
+    substr($0, 53, 13)     
+}' Run1.0_list.txt > separated_Run1.0.txt
