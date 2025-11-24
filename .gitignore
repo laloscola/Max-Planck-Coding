@@ -1,5 +1,7 @@
 data_II/
 data_MCPPMT/
+data_oscill/
+data*
 *.parquet
 *.csv
 Old\ Scripts/
