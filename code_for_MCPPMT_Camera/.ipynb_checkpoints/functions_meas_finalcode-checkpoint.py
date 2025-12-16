@@ -178,7 +178,7 @@ def plot_all_channels(df, target_event = 0):
     plt.figure(figsize=(6,2))
     plt.plot(event["timestamp"], event["Ch_1"], label="Laser Trigger")
     plt.plot(event["timestamp"], event["Ch_2"], label="MCP PMT Camera")
-    plt.plot(event["timestamp"], event["Ch_3"], label="HPD")
+    # plt.plot(event["timestamp"], event["Ch_3"], label="HPD")
     plt.xlabel("Timestamp (s)")
     plt.ylabel("Signal")
     plt.title(f"Event {target_event}")
@@ -355,7 +355,7 @@ def plot_jitter_histogram(deltas, bins=200, Run_Number = None, Counts=None, perc
     plt.hist(deltas, bins=bins, alpha=0.8, edgecolor="k")  # example: ps
     plt.xlabel("Time difference (s)")
     plt.ylabel("Counts")
-    plt.title(f"Jitter distribution of Run {Run_Number} with {Counts} acqusitions at ratio {percentage}%")
+    plt.title(f"Jitter distribution of Run {Run_Number} with {Counts} acquisitions at ratio {percentage}%")
     plt.tight_layout()
     # plt.savefig(f"JitterHist_Run{Run_Number}_Counts{Counts}.png", dpi=300)
     plt.show()
@@ -365,7 +365,7 @@ def plot_jitter_vs_event(deltas, Run_Number = None, Counts=None, percentage = No
     plt.plot(np.arange(len(deltas)), deltas , ".", ms=3)
     plt.xlabel("Event index")
     plt.ylabel("Time difference (s)")
-    plt.title(f"Jitter vs event of Run {Run_Number} with {Counts} acqusitions at ratio {percentage}%")
+    plt.title(f"Jitter vs event of Run {Run_Number} with {Counts} acquisitions at ratio {percentage}%")
     plt.tight_layout()
     # plt.savefig(f"JitterVsEventHist_Run{Run_Number}_Counts{Counts}.png", dpi=300)
     plt.show()
@@ -463,7 +463,7 @@ def plot_jitter_gaussian_two_views(deltas,
 
     plt.tight_layout()
     plt.legend()
-    plt.savefig(f"JitterFitFullView_Run{Run_Number}_Counts{Counts}.png", dpi=300)
+    # plt.savefig(f"JitterFitFullView_Run{Run_Number}_Counts{Counts}.png", dpi=300)
     plt.show()
 
     # ---------- 2) Zoomed view ----------
@@ -616,3 +616,56 @@ def main_amplitude_spectrum_zoom(data, min_thresh=-0.01, bins = 100, channel = '
         plt.tight_layout()
         # plt.savefig(f"ZoomedAmplitudeSpectrum_Run{Run_Number}_Counts{Counts}.png", dpi=300)        
         plt.show()
+
+
+
+
+
+# ------------------------------------- 4. binary format conversion 15th december -------------------------------------------
+def converter_binary_to_df(filepath, show_info = True): 
+    '''Should give pandas dataframe of the form: 
+       event_id | time_axis | Ch_1_volt | Ch_2_volt |
+    '''
+    if os.path.exists(filepath): # checks existence of path
+        root, ext = os.path.splitext(filepath)
+        ext = ext.lower()
+    
+        if ext == '.bin': # checking file type
+            y, x , S = RTxReadBin(filepath) # x is time axis, y is voltage, S is header information
+            if show_info:
+                for k in (list(S.keys())[:80]):
+                    if k == 'Resolution': 
+                        print(f'{k} -> {S[k]}')
+                    if  k == 'RecordLength': 
+                        print(f'{k} -> {S[k]}')
+                    if k == 'Timestamps': 
+                        print(f'Number of Acquisitions: {len(S[k])}\nTimestamps recorded: Yes')  # prints information about time resolution and recordlength           
+        if ext == '.csv': 
+            print('CSV file given: use meas_finalcode_camera.ipynb function convert#channels_csv_to_csv_and_parquet instead')
+        if ext not in ('.bin', '.csv'): 
+            print(f'Unknown filetype: {ext}')
+
+        # now check for number of channels in y 
+        
+        n_samples, n_acq, n_ch = y.shape # how many samples per acquisition, acquisitions, channels
+        print(f'Number of channels given: {n_ch}')
+
+        # broadcast x over acquisitions
+        timestamps = np.tile(x[:, None], (1, n_acq))          # (n_samples, n_acq)
+        event_ids = np.tile(np.arange(n_acq)[None, :], (n_samples, 1))  # (n_samples, n_acq)
+        
+        # flatten everything
+        timestamps_flat = timestamps.ravel()   # length n_samples * n_acq
+        event_ids_flat = event_ids.ravel()
+        
+        ch1_flat = y[:, :, 0].ravel()          # adapt indices to your channel mapping
+        ch2_flat = y[:, :, 1].ravel()
+        
+        df = pd.DataFrame({
+            "event_id": event_ids_flat,
+            "timestamp": timestamps_flat,
+            "Ch_1": ch1_flat,
+            "Ch_2": ch2_flat,
+        })
+
+        return df     
