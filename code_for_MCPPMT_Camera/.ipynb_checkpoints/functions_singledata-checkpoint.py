@@ -347,7 +347,7 @@ def compute_jitter(df, ch_ref="Ch_1", ch_test="Ch_2",
         return deltas, None, None
 
     mean_offset = deltas.mean()
-    jitter = deltas.std(ddof=1)  # RMS jitter
+    jitter = deltas.std(ddof=1)  # jitter
     return deltas, mean_offset, jitter
 
 def plot_jitter_histogram(deltas, bins=200, Run_Number = None, Counts=None, percentage = None):  # plot of the jitter distribution
@@ -355,7 +355,7 @@ def plot_jitter_histogram(deltas, bins=200, Run_Number = None, Counts=None, perc
     plt.hist(deltas, bins=bins, alpha=0.8, edgecolor="k")  # example: ps
     plt.xlabel("Time difference (s)")
     plt.ylabel("Counts")
-    plt.title(f"Jitter distribution of Run {Run_Number} with {Counts} acquisitions at ratio {percentage}%")
+    plt.title(f"Jitter distribution of 1 Mio Acquisitions")
     plt.tight_layout()
     # plt.savefig(f"JitterHist_Run{Run_Number}_Counts{Counts}.png", dpi=300)
     plt.show()
@@ -410,7 +410,7 @@ def plot_jitter_gaussian_two_views(deltas,
                                    unit_scale=1e9,
                                    unit_label="ns",
                                    zoom_factor=2.0, 
-                                   Run_Number = None , Counts=None , percentage = None):
+                                   Run_Number = None , Counts=None , percentage = None, save_full_fig=False, save_zoomed_fig=False):
     """
     Plot jitter histogram + Gaussian fit in two views:
       1) Full x-range
@@ -435,7 +435,7 @@ def plot_jitter_gaussian_two_views(deltas,
     fwhm_u = fwhm_s * unit_scale
 
     # x-grid for fitted curve in user units
-    x_fit_u = np.linspace(bin_centers_u.min(), bin_centers_u.max(), 1000)
+    x_fit_u = np.linspace(bin_centers_u.min(), bin_centers_u.max(), 5000)
     x_fit_s = x_fit_u / unit_scale
     y_fit = gauss(x_fit_s, *popt)
 
@@ -443,8 +443,9 @@ def plot_jitter_gaussian_two_views(deltas,
     right_u = mu_u + 0.5 * fwhm_u
 
     # ---------- 1) Full view ----------
+    plt.style.use('ggplot')
     plt.figure(figsize=(6, 4))
-    plt.hist(deltas_u, bins=bins, alpha=0.7, edgecolor="k", label="Data")
+    plt.hist(deltas_u, bins=bins, alpha=0.7, color='C1', label="Data")
     plt.plot(x_fit_u, y_fit, "r-", label="Gaussian fit")
 
     plt.axvline(left_u, color="green", linestyle="--", label="FWHM")
@@ -452,18 +453,19 @@ def plot_jitter_gaussian_two_views(deltas,
 
     plt.xlabel(f"Time difference ({unit_label})")
     plt.ylabel("Counts")
-    plt.title(f"Jitter distribution (full) of Run {Run_Number} with {Counts} acquisitions at ratio {percentage}%")
+    plt.title(f"Jitter distribution (full) for 1 Mio Acquisitions")
 
     plt.text(
         0.05, 0.95,
-        f"μ ≈ {mu_u:.2f} {unit_label}\nσ ≈ {sigma_u:.2f} {unit_label}\nFWHM ≈ {fwhm_u:.2f} {unit_label}",
+        f"μ ≈ {mu_u:.3f} {unit_label}\nσ ≈ {sigma_u:.3f} {unit_label}\nFWHM ≈ {fwhm_u:.3f} {unit_label}",
         transform=plt.gca().transAxes,
         va="top", ha="left", color="black"
     )
 
     plt.tight_layout()
     plt.legend()
-    # plt.savefig(f"JitterFitFullView_Run{Run_Number}_Counts{Counts}.png", dpi=300)
+    if save_full_fig:
+        plt.savefig(f"JitterFitFullView_Run{Run_Number}_Counts{Counts}.png", dpi=300)
     plt.show()
 
     # ---------- 2) Zoomed view ----------
@@ -472,7 +474,7 @@ def plot_jitter_gaussian_two_views(deltas,
     x_max = mu_u + half_width_u
 
     plt.figure(figsize=(6, 4))
-    plt.hist(deltas_u, bins=bins, alpha=0.7, edgecolor="k", label="Data")
+    plt.hist(deltas_u, bins=bins, alpha=0.7, color='C1', edgecolor='k', linewidth=0, label="Data")
     plt.plot(x_fit_u, y_fit, "r-", label="Gaussian fit")
 
     plt.axvline(left_u, color="green", linestyle="--", label="FWHM")
@@ -481,32 +483,35 @@ def plot_jitter_gaussian_two_views(deltas,
     plt.xlim(x_min, x_max)
     plt.xlabel(f"Time difference ({unit_label})")
     plt.ylabel("Counts")
-    plt.title(f"Jitter distribution (zoomed) of Run {Run_Number} with {Counts} acquisitions at ratio {percentage}%")
+    plt.title(f"Jitter distribution (zoomed) for 1 Mio Acqusitions")
 
     plt.text(
         0.05, 0.95,
-        f"μ ≈ {mu_u:.2f} {unit_label}\nσ ≈ {sigma_u:.2f} {unit_label}\nFWHM ≈ {fwhm_u:.2f} {unit_label}",
+        f"μ ≈ {mu_u:.3f} {unit_label}\nσ ≈ {sigma_u:.3f} {unit_label}\nFWHM ≈ {fwhm_u:.3f} {unit_label}",
         transform=plt.gca().transAxes,
         va="top", ha="left", color="black"
     )
 
     plt.tight_layout()
     plt.legend()
-    # plt.savefig(f"JitterFitZoomed_Run{Run_Number}_Counts{Counts}.png", dpi=300)
+    if save_zoomed_fig:
+        plt.savefig(f"JitterFitZoomed_Run{Run_Number}_Counts{Counts}.png", dpi=300)
     plt.show()
 
     return mu_s, sigma_s, fwhm_s
 
-def main_jitter_plot_and_fwhm(data, bins_fit = 50, zoom_factor= 4, Run_Number = None, Counts=None, percentage = None):
+def main_jitter_plot_and_fwhm(data, min_thresh=-0.01, bins_fit = 50, zoom_factor= 4, Run_Number = None, Counts=None, percentage = None, show_plots=True, save_fig=False):
     df = load_df(data)
-    int_ids = interesting_value_filter(df)
+    int_ids = interesting_value_filter(df, min_thresh=min_thresh)
 
     int_df = df[df['event_id'].isin(int_ids)]
     deltas, mean_offset, jitter = compute_jitter(int_df)
-   
-    plot_jitter_histogram(deltas, Run_Number=Run_Number, Counts=Counts, percentage=percentage)
-    plot_jitter_vs_event(deltas, Run_Number=Run_Number, Counts=Counts, percentage=percentage)
-    plot_jitter_gaussian_two_views(deltas, bins=bins_fit, zoom_factor=zoom_factor, Run_Number=Run_Number, Counts=Counts, percentage=percentage)
+    if show_plots:
+        plot_jitter_histogram(deltas, Run_Number=Run_Number, Counts=Counts, percentage=percentage)
+        plot_jitter_vs_event(deltas, Run_Number=Run_Number, Counts=Counts, percentage=percentage)
+        plot_jitter_gaussian_two_views(deltas, bins=bins_fit, zoom_factor=zoom_factor, Run_Number=Run_Number, Counts=Counts, percentage=percentage, save_fig=save_fig)
+
+    return deltas, mean_offset, jitter 
 
 
 # -------------------- 3. Integrating Pulse for Amplitude Spectrum --------------------------
@@ -562,7 +567,7 @@ def event_charge_negative_adaptive(event_df, channel="Ch_2", cf_frac=0.5, level_
     area = integrate_pulse(t, y_bs, t_start, t_end)
     return abs(area)  # V·time
 
-def main_amplitude_spectrum(data, min_thresh=-0.01, bins = 100, channel = 'Ch_2', cf_frac = 0.5, level_frac = 0.1, Run_Number = None, Counts=None, percentage = None):
+def main_amplitude_spectrum(data, min_thresh=-0.01, bins = 100, channel = 'Ch_2', cf_frac = 0.5, level_frac = 0.1, show_plots=True, save_plots=False, Run_Number = None, Counts=None, percentage = None):
     df = load_df(data)
     int_ids = interesting_value_filter(df, min_thresh=min_thresh)
     int_df = df[df['event_id'].isin(int_ids)] # keep interesting df
@@ -576,15 +581,17 @@ def main_amplitude_spectrum(data, min_thresh=-0.01, bins = 100, channel = 'Ch_2'
     
     if charges is not None: 
         print(f'The mean area is: {np.mean(charges)} Vs')
-        
-        plt.figure(figsize=(5, 3))
-        plt.hist(charges, bins=bins, alpha=0.8, edgecolor="k")
-        plt.xlabel(f"Area under Pulse (Vs)")
-        plt.ylabel("Counts")
-        plt.title(f"Amplitude spectrum of Run {Run_Number} with {Counts} Aquisitions and Ratio {percentage}%")
-        plt.tight_layout()
-        # plt.savefig(f"AmplitudeSpectrum_Run{Run_Number}_Counts{Counts}.png", dpi=300)       
-        plt.show()
+        if show_plots:  
+            plt.figure(figsize=(5, 3))
+            plt.hist(charges, bins=bins, alpha=0.8, edgecolor="k")
+            plt.xlabel(f"Area under Pulse (Vs)")
+            plt.ylabel("Counts")
+            plt.title(f"Amplitude spectrum of Run {Run_Number} with {Counts} Aquisitions and Ratio {percentage}%")
+            plt.tight_layout()
+            if save_plots:
+                plt.savefig(f"AmplitudeSpectrum_Run{Run_Number}_Counts{Counts}.png", dpi=300)       
+            plt.show()
+        return charges
 
 def main_main(data, bins_fit=1000, Run_Number=None , Counts=None):
     percentage = main_ratio_and_plots(data=data, min_thresh=-0.01, show_all_channels=False, show_only_camera=False)
@@ -606,7 +613,7 @@ def main_amplitude_spectrum_zoom(data, min_thresh=-0.01, bins = 100, channel = '
             charges.append(q)
     
     if charges is not None: 
-        print(f'The mean area is: {np.mean(charges)} Vs')
+        #print(f'The mean area is: {np.mean(charges)} Vs')
         
         plt.figure(figsize=(5, 3))
         plt.hist(charges, bins=bins, alpha=0.8, edgecolor="k")
@@ -617,7 +624,7 @@ def main_amplitude_spectrum_zoom(data, min_thresh=-0.01, bins = 100, channel = '
         # plt.savefig(f"ZoomedAmplitudeSpectrum_Run{Run_Number}_Counts{Counts}.png", dpi=300)        
         plt.show()
 
-
+ 
 
 
 
@@ -648,7 +655,8 @@ def converter_binary_to_df(filepath, show_info = True):
         # now check for number of channels in y 
         
         n_samples, n_acq, n_ch = y.shape # how many samples per acquisition, acquisitions, channels
-        print(f'Number of channels given: {n_ch}')
+        if show_info:
+            print(f'Number of channels given: {n_ch}')
 
         # broadcast x over acquisitions
         timestamps = np.tile(x[:, None], (1, n_acq))          # (n_samples, n_acq)
