@@ -169,65 +169,61 @@ def load_df(data): # load data no matter if already df or file
     else:
         raise TypeError("Input must be a filename or a pandas DataFrame.")
     return df    
+
+DEFAULT_CHANNELS = {'Ch_1': 'Laser trigger', 'Ch_2': 'MCP1', 'Ch_3': 'MCP2'}
     
-def plot_all_channels(df, target_event = 0):
+def plot_channels(df, target_event = 0, channels=None):
     # filter for target event
     event= df[df['event_id'] == target_event] 
 
+    if channels is None:
+        channels = DEFAULT_CHANNELS
     # plot
     plt.figure(figsize=(6,2))
-    plt.plot(event["timestamp"], event["Ch_1"], label="Laser Trigger")
-    plt.plot(event["timestamp"], event["Ch_2"], label="MCP PMT Camera")
-    # plt.plot(event["timestamp"], event["Ch_3"], label="HPD")
+    for ch in channels:
+        plt.plot(event["timestamp"], event[ch], label=channels.get(ch,ch))
+    
     plt.xlabel("Timestamp (s)")
     plt.ylabel("Signal")
     plt.title(f"Event {target_event}")
     plt.legend()
     plt.show()
 
-def plot_only_camera(df, target_event = 0):
-    # filter for target event
-    event= df[df['event_id'] == target_event] 
+def interesting_value_filter(df, min_thresh=-0.01, cols=None):
+    if cols is None:
+        cols = ('Ch_2',)
+        print('trigger events from Ch_2 only')
+    mins = df.groupby("event_id")[list(cols)].min()   
+    mask = (mins < min_thresh).all(axis=1)            # True if any channel min is below threshold
+    return mins.index[mask].to_list()
 
-    # plot
-    plt.figure(figsize=(6,2))
-    plt.plot(event["timestamp"], event["Ch_2"], label="MCP PMT Camera")
-    plt.xlabel("Timestamp (s)")
-    plt.ylabel("Signal")
-    plt.title(f"Event {target_event}")
-    plt.legend()
-    plt.show()
 
-def interesting_value_filter(df, min_thresh = -0.01):  # filters interesting events according to thresh
-    # one grouped min over the whole DataFrame
-    mins = df.groupby('event_id')['Ch_2'].min()
-    # select only those event_ids whose min < threshold
-    interesting_ids = mins[mins < min_thresh].index.to_list()
-    return interesting_ids
-
-def main_ratio_and_plots(data, min_thresh = -0.01, show_all_channels=False, show_only_camera=True):
+def main_ratio_and_plots(data, min_thresh = -0.01, show_channels=None, filter_channels=None):
     '''Usage:
         1. Input of the cleaned file after convert_csv_to_csv_and_parquet
         2. Define acceptable threshold for the minima one wants to accept
        Purpose:
         - takes an oscilloscope dataset and returns the ratio of 
     '''
+    if show_channels is None:
+        show_channels = DEFAULT_CHANNELS
+    if filter_channels is None:
+        filter_channels = ('Ch_2',)
+        print('trigger events from Ch_2 only')
     df = load_df(data)  # returns df if either pandas dataframe or directly from file
-    interesting_ids = interesting_value_filter(df, min_thresh)
+    interesting_ids = interesting_value_filter(df, min_thresh, cols=filter_channels)
     
     ratio = len(interesting_ids)/(max(df['event_id'])+1-len(interesting_ids))
     percentage = ratio * 100
+
+    
     print(f'There are: {len(interesting_ids)} interesting events, that match the used threshold')
     # print(f'These events are numbered: {interesting_ids}')
     print(f'The percentage of interesting events to empty events is: {percentage:.3f}%')
 
-    if show_all_channels:
+    if show_channels != None: 
         for i in interesting_ids:
-            plot_all_channels(df, target_event=i)
-
-    if show_only_camera:
-        for i in interesting_ids:
-            plot_only_camera(df, target_event=i)
+            plot_channels(df, target_event=i, channels = show_channels)
 
     return percentage
 
@@ -406,6 +402,7 @@ def fit_gaussian_to_jitter(deltas, bins=50, range=None):
     return popt, pcov, bin_centers, counts
 
 def plot_jitter_gaussian_two_views(deltas,
+                                   bins_fit=50,
                                    bins=50,
                                    unit_scale=1e9,
                                    unit_label="ns",
@@ -418,7 +415,7 @@ def plot_jitter_gaussian_two_views(deltas,
     deltas are in seconds; unit_scale converts to desired units for plotting.
     """
     # --- Fit Gaussian on histogram in seconds ---
-    popt, pcov, bin_centers_s, counts = fit_gaussian_to_jitter(deltas, bins=bins)
+    popt, pcov, bin_centers_s, counts = fit_gaussian_to_jitter(deltas, bins=bins_fit)
     if popt is None:
         print("Gaussian fit to jitter histogram failed.")
         return None, None, None
@@ -453,7 +450,7 @@ def plot_jitter_gaussian_two_views(deltas,
 
     plt.xlabel(f"Time difference ({unit_label})")
     plt.ylabel("Counts")
-    plt.title(f"Jitter distribution (full) for 1 Mio Acquisitions")
+    plt.title(f"Jitter distribution (full) for 50k acq of Ch 3 aqua")
 
     plt.text(
         0.05, 0.95,
@@ -465,7 +462,7 @@ def plot_jitter_gaussian_two_views(deltas,
     plt.tight_layout()
     plt.legend()
     if save_full_fig:
-        plt.savefig(f"JitterFitFullView_Run{Run_Number}_Counts{Counts}.png", dpi=300)
+        plt.savefig(f"JitterFitFull_Ch3_aqua.png", dpi=300)
     plt.show()
 
     # ---------- 2) Zoomed view ----------
@@ -483,7 +480,7 @@ def plot_jitter_gaussian_two_views(deltas,
     plt.xlim(x_min, x_max)
     plt.xlabel(f"Time difference ({unit_label})")
     plt.ylabel("Counts")
-    plt.title(f"Jitter distribution (zoomed) for 1 Mio Acqusitions")
+    plt.title(f"Jitter distribution (zoomed) for 50k acq of Ch 3 aqua")
 
     plt.text(
         0.05, 0.95,
@@ -495,21 +492,21 @@ def plot_jitter_gaussian_two_views(deltas,
     plt.tight_layout()
     plt.legend()
     if save_zoomed_fig:
-        plt.savefig(f"JitterFitZoomed_Run{Run_Number}_Counts{Counts}.png", dpi=300)
+        plt.savefig(f"JitterFitZoomed_Ch3_aqua.png", dpi=300)
     plt.show()
 
     return mu_s, sigma_s, fwhm_s
 
-def main_jitter_plot_and_fwhm(data, min_thresh=-0.01, bins_fit = 50, zoom_factor= 4, Run_Number = None, Counts=None, percentage = None, show_plots=True, save_fig=False):
+def main_jitter_plot_and_fwhm(data, min_thresh=-0.01, bins_fit = 50 , bins=50, zoom_factor= 4, Run_Number = None, Counts=None, percentage = None, show_plots=True, save_full_fig=False, save_zoomed_fig=False, ch_ref='Ch_1', ch_test='Ch_2'):
     df = load_df(data)
-    int_ids = interesting_value_filter(df, min_thresh=min_thresh)
+    int_ids = interesting_value_filter(df, min_thresh=min_thresh, cols=(ch_test,))
 
     int_df = df[df['event_id'].isin(int_ids)]
-    deltas, mean_offset, jitter = compute_jitter(int_df)
+    deltas, mean_offset, jitter = compute_jitter(int_df, ch_ref=ch_ref, ch_test=ch_test)
     if show_plots:
         plot_jitter_histogram(deltas, Run_Number=Run_Number, Counts=Counts, percentage=percentage)
         plot_jitter_vs_event(deltas, Run_Number=Run_Number, Counts=Counts, percentage=percentage)
-        plot_jitter_gaussian_two_views(deltas, bins=bins_fit, zoom_factor=zoom_factor, Run_Number=Run_Number, Counts=Counts, percentage=percentage, save_fig=save_fig)
+        plot_jitter_gaussian_two_views(deltas, bins_fit=bins_fit, bins=bins, zoom_factor=zoom_factor, Run_Number=Run_Number, Counts=Counts, percentage=percentage, save_full_fig=save_full_fig, save_zoomed_fig=save_zoomed_fig)
 
     return deltas, mean_offset, jitter 
 
@@ -545,7 +542,7 @@ def adaptive_window_negative(t, y, frac_level=0.1):
     i_end = idx[-1]
     return t[i_start], t[i_end]
 
-def event_charge_negative_adaptive(event_df, channel="Ch_2", cf_frac=0.5, level_frac=0.1, t_pre_max=None):
+def event_charge_negative_adaptive_or_fixed(event_df, channel="Ch_2", cf_frac=0.5, level_frac=0.1, t_pre_max=None, fixed_window=True, integration_range=(-0.35e-8, -0.1e-8)):
     """
     Baseline-subtract, locate negative pulse, then integrate over an
     amplitude-adaptive window (where |y| > level_frac * |min|).
@@ -553,29 +550,41 @@ def event_charge_negative_adaptive(event_df, channel="Ch_2", cf_frac=0.5, level_
     t = event_df["timestamp"].to_numpy()
     y = event_df[channel].to_numpy()
 
-    y_bs, baseline = subtract_baseline(t, y, t_pre_max=t_pre_max)
 
-    # ensure a pulse exists
-    if y_bs.min() >= 0:
-        return None
+    # uses fixed integration window without baseline subtraction
+    if fixed_window:
+        t_start, t_end = integration_range
+        area = integrate_pulse(t,y, t_start, t_end)
+    # use adaptive window from fraction-of-depth with baseline subtraction
+    if not fixed_window:
+        t_start, t_end = adaptive_window_negative(t, y_bs, frac_level=level_frac)
+        y_bs, baseline = subtract_baseline(t, y, t_pre_max=t_pre_max)
+    
+        # ensure a pulse exists
+        if y_bs.min() >= 0:
+            return None
+        area = integrate_pulse(t, y_bs, t_start, t_end)
 
-    # use adaptive window from fraction-of-depth
-    t_start, t_end = adaptive_window_negative(t, y_bs, frac_level=level_frac)
+    
     if t_start is None:
         return None
 
-    area = integrate_pulse(t, y_bs, t_start, t_end)
     return abs(area)  # V·time
 
-def main_amplitude_spectrum(data, min_thresh=-0.01, bins = 100, channel = 'Ch_2', cf_frac = 0.5, level_frac = 0.1, show_plots=True, save_plots=False, Run_Number = None, Counts=None, percentage = None):
+def main_amplitude_spectrum(data, min_thresh=-0.01, bins = 100, channel = 'Ch_2', cf_frac = 0.5, level_frac = 0.1, show_plots=True, save_plots=False, Run_Number = None, Counts=None, percentage = None, fixed_window=True, integration_range=(-0.25e-8, -0.15e-8)):
     df = load_df(data)
-    int_ids = interesting_value_filter(df, min_thresh=min_thresh)
-    int_df = df[df['event_id'].isin(int_ids)] # keep interesting df
 
+    if not fixed_window:   
+        int_ids = interesting_value_filter(df, min_thresh=min_thresh)
+        int_df = df[df['event_id'].isin(int_ids)] # keep interesting df
+    if fixed_window:
+        int_df = df 
+        # sort once, not inside the loop
+        int_df = int_df.sort_values(["event_id", "timestamp"], kind="mergesort")
+        
     charges = []
-    for eid in int_df["event_id"].unique():
-        event = int_df[int_df["event_id"] == eid].sort_values("timestamp")
-        q = event_charge_negative_adaptive(event, channel=channel, cf_frac = cf_frac, level_frac = level_frac)
+    for eid, event in int_df.groupby("event_id", sort=False):
+        q = event_charge_negative_adaptive_or_fixed(event, channel=channel, cf_frac = cf_frac, level_frac = level_frac, integration_range=integration_range, fixed_window=fixed_window)
         if q is not None:
             charges.append(q)
     
@@ -594,7 +603,7 @@ def main_amplitude_spectrum(data, min_thresh=-0.01, bins = 100, channel = 'Ch_2'
         return charges
 
 def main_main(data, bins_fit=1000, Run_Number=None , Counts=None):
-    percentage = main_ratio_and_plots(data=data, min_thresh=-0.01, show_all_channels=False, show_only_camera=False)
+    percentage = main_ratio_and_plots(data=data, min_thresh=-0.01, show_all_channels=False, show_this_channel=False)
     percentage = round(percentage, 3)
     
     main_jitter_plot_and_fwhm(data=data, bins_fit=bins_fit, Run_Number=Run_Number, Counts=Counts, percentage=percentage)
@@ -631,7 +640,7 @@ def main_amplitude_spectrum_zoom(data, min_thresh=-0.01, bins = 100, channel = '
 # ------------------------------------- 4. binary format conversion 15th december -------------------------------------------
 def converter_binary_to_df(filepath, show_info = True): 
     '''Should give pandas dataframe of the form: 
-       event_id | time_axis | Ch_1_volt | Ch_2_volt |
+       event_id | time_axis | Ch_1_volt | Ch_2_volt | Ch_3_volt ....
     '''
     if os.path.exists(filepath): # checks existence of path
         root, ext = os.path.splitext(filepath)
@@ -665,15 +674,14 @@ def converter_binary_to_df(filepath, show_info = True):
         # flatten everything
         timestamps_flat = timestamps.ravel()   # length n_samples * n_acq
         event_ids_flat = event_ids.ravel()
-        
-        ch1_flat = y[:, :, 0].ravel()          # adapt indices to your channel mapping
-        ch2_flat = y[:, :, 1].ravel()
+
+        channels = list(range(1,n_ch+1))
+        ch_dict = {f'Ch_{i}' : y[:,:,i-1].ravel() for i in channels} 
         
         df = pd.DataFrame({
             "event_id": event_ids_flat,
             "timestamp": timestamps_flat,
-            "Ch_1": ch1_flat,
-            "Ch_2": ch2_flat,
+            **ch_dict
         })
 
         return df     
